@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  db:
+    image: docker.arvancloud.ir/postgres:16-alpine
+    container_name: db-container
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    restart: always
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U team1_user -d team1_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - my-network
+
+  django:
+   # build: 
+    #  context: ./app
+     # dockerfile: Dockerfile
+    image: team1-django:latest
+    container_name: django-container
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "pip install --no-index --find-links=/app/wheels -r requirements.txt &&
+             python manage.py migrate &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    volumes:
+      - .:/app
+      - /app/venv
+      - static-data:/app/staticfiles  # مسیر فایل‌های استاتیک جنگو (بسته به تنظیماتت در settings.py)
+      - media-data:/app/media    # مسیر آپلودهای کاربر
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+       DEBUG: ${DEBUG}
+       SECRET_KEY: ${SECRET_KEY}
+       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+    networks:
+      - my-network
+
+  nginx:
+    image: docker.arvancloud.ir/nginx:latest
+    container_name: nginx-container
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      # مپ کردن تنظیمات Nginx
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # اشتراک‌گذاری فایل‌های استاتیک جنگو با Nginx
+      - static-data:/app/staticfiles:ro
+      - media-data:/app/media:ro
+    depends_on:
+      - django
+    networks:
+      - my-network
+
+networks:
+  my-network:
+    driver: bridge
+
+volumes:
+  db-data:
+  static-data:
+  media-data:

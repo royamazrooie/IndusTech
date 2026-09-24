@@ -1,0 +1,17 @@
+name: Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - frontend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        run: |
+          cd /home/roya/team1
+          chmod +x ./deploy.sh
+          bash ./deploy.sh
